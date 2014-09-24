@@ -4814,6 +4814,18 @@ class LibvirtDriver(driver.ComputeDriver):
 
         return jsonutils.dumps(pci_info)
 
+    def _is_ht_enabled(self):
+        """ Determins whether the host has hyperthreading enabled
+        """
+
+        has_ht_flag = False
+        caps = self._get_host_capabilities()
+        for flag in caps.host.cpu.features:
+            has_ht_flag = (flag.name == 'ht')
+            if has_ht_flag:
+                break
+        return has_ht_flag and (caps.host.cpu.threads > 1)
+
     def _get_host_numa_topology(self):
         caps = self._get_host_capabilities()
         topology = caps.host.topology
@@ -6390,6 +6402,7 @@ class HostState(object):
         else:
             data['numa_topology'] = None
 
+        data['hyper_threaded'] = self.driver._is_ht_enabled()
         self._stats = data
 
         return data
