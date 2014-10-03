@@ -3749,6 +3749,35 @@ class LibvirtDriver(driver.ComputeDriver):
             else:
                 return allowed_cpus, None, guest_cpu_numa
 
+    def _get_available_cpus(self, topology, reserved, cell):
+        host_cpus = topology.get_cell(cell.id)
+        reserved_cpu_ids = [cpu.id for cpu in reserved.get_cell(cell.id)]
+        return [cpu in host_cpus
+                if not cpu in reserved_cpu_ids]
+
+    def _try_alloc_sibling(self, cpu, available_cpus):
+        cpu_sibling = [id for id in cpu.siblings if id != cpu.id]
+        if cpu_sibling:
+            return [sibling in available_cpus
+                    if sibling.id == cpu_sibling[0]]
+
+    def _adjust_cputune(self, viable_cells):
+        for cell in viable_cells:
+            available = self._get_available_cpus(topology, reserved, cell)
+            num_req_cpu = guest.vcpu
+            if len(available) < num_req_cpu:
+                continue
+            else:
+                while num_req_cpu:
+                    cpu = available.get()
+                    reserved.add(cpu)
+                    num_req_cpu -= 1
+                    if num_req_cpu:
+                        cpu = self._try_alloc_sibling(cpu, available_cpus)
+                        if cpu:
+                            reserved.add(cpu)
+                            num_req_cpu -= 1
+
     def _get_guest_config(self, instance, network_info, image_meta,
                           disk_info, rescue=None, block_device_info=None,
                           context=None):
